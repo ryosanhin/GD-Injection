@@ -2,33 +2,33 @@ extends RefCounted
 class_name InjectionContainer
 
 const ResolveEntry := preload("resolve_entry.gd")
+const ResolveEntryMap := preload("resolve_entry_map.gd")
 
-## 親スコープのコンテナです。ローカルで見つからない依存を親へ問い合わせ
-var _parent: InjectionContainer
+## 親スコープのコンテナです。このコンテナ内で見つからない依存を親へ問い合わせ
+var _parent_container: InjectionContainer
 
-## 「公開型class_name + ID」をキーにしたローカル登録
-## Dictionary は内部的には Dictionary[String, ResolveEntry]
-var _entries: Dictionary[Script, Dictionary] = {}
+## 公開型ごとのこのコンテナ内での登録コレクション
+var _entry_maps_by_service_type: Dictionary[Script, ResolveEntryMap] = {}
 
 ## 任意の親コンテナを指定してスコープを生成
-func _init(parent: InjectionContainer) -> void:
-	_parent = parent
+func _init(init_parent_container: InjectionContainer) -> void:
+	_parent_container = init_parent_container
 
 
 ## 登録情報をローカルスコープへ追加
 func register(registration: ServiceRegistration) -> void:
 	var validation_errors := registration.validate()
 	if not validation_errors.is_empty():
-		var errors := "\n".join(validation_errors)
-		push_error("登録情報が不正です:\n%s" % errors)
+		var error_message := "\n".join(validation_errors)
+		push_error("登録情報が不正です:\n%s" % error_message)
 		return
 
-	if not _entries.has(registration.service_type):
-		_entries[registration.service_type] = {}
-	
-	var entries: Dictionary[String, ResolveEntry] = _entries[registration.service_type]
+	if not _entry_maps_by_service_type.has(registration.service_type):
+		_entry_maps_by_service_type[registration.service_type] = ResolveEntryMap.new()
 
-	if entries.has(registration.key):
+	var entry_map: ResolveEntryMap = _entry_maps_by_service_type[registration.service_type]
+
+	if entry_map.has(registration.key):
 		push_error(
 			"登録が重複しています: 型=%s, id=%s" % [
 				registration.service_name,
@@ -37,23 +37,23 @@ func register(registration: ServiceRegistration) -> void:
 		)
 		return
 
-	entries[registration.key] = ResolveEntry.new(registration)
+	entry_map.register(registration.key, ResolveEntry.new(registration))
 
 
 func resolve(
 	service_type: Script,
 	key: StringName,
 ) -> Variant:
-	var entry: ResolveEntry = null
+	var resolve_entry: ResolveEntry = null
 
 	if not key.is_empty():
-		entry = find_resolve_entry(service_type, key)
+		resolve_entry = find_resolve_entry(service_type, key)
 	
-	if entry == null:
-		entry = find_resolve_entry(service_type, &"")
+	if resolve_entry == null:
+		resolve_entry = find_resolve_entry(service_type, &"")
 
-	if entry != null:
-		return entry.resolve()
+	if resolve_entry != null:
+		return resolve_entry.resolve()
 
 	push_error(
 		"登録が見つかりません: 型=%s, id=%s" % [
@@ -68,26 +68,23 @@ func find_resolve_entry(
 	service_type: Script,
 	key: StringName,
 ) -> ResolveEntry:
-	var extracted_entries: Dictionary[String, ResolveEntry] = _entries.get(service_type, {})
+	if _entry_maps_by_service_type.has(service_type):
+		var entry_map := _entry_maps_by_service_type[service_type]
+		if entry_map.has(key):
+			return entry_map.find(key)
 
-	if not extracted_entries.is_empty():
-		if extracted_entries.has(key):
-			return extracted_entries[key]
-
-	if _parent != null:
-		return _parent.find_resolve_entry(service_type, key)
+	if _parent_container != null:
+		return _parent_container.find_resolve_entry(service_type, key)
 
 	return null
 
 
 ## Singleton参照とローカル登録を解放します。
 func clear() -> void:
-	for entries: Dictionary[String, ResolveEntry] in _entries.values():
-		for entry: ResolveEntry in entries.values():
-			entry.clear()
+	for entries: ResolveEntryMap in _entry_maps_by_service_type.values():
 		entries.clear()
-	_entries.clear()
-	_parent = null
+	_entry_maps_by_service_type.clear()
+	_parent_container = null
 
 
 ## 空IDをログ上で判別しやすい文字列に変換

@@ -16,6 +16,14 @@
 - https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue
 -->
 
+## 関連PR/Related PRs
+
+<!--
+関連するPRを記載
+
+例： - # 1
+-->
+
 ## 詳細/Details
 
 <!--
