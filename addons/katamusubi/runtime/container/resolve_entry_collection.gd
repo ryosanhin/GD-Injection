@@ -1,5 +1,5 @@
 extends RefCounted
-class_name ResolveEntryCollection
+## 登録キーと登録内容を紐づけた辞書のラッパークラス
 
 const ResolveEntry := preload("resolve_entry.gd")
 
