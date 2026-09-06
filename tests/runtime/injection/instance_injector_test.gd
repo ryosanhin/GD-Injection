@@ -8,7 +8,7 @@ const BaseService := preload("res://tests/fixtures/services/base_service.gd")
 const DerivedService := preload("res://tests/fixtures/services/derived_service.gd")
 const TrackedService := preload("res://tests/fixtures/services/tracked_service.gd")
 const NoArgumentsNode := preload(
-	"res://tests/fixtures/injection_targets/recording_no_arguments_node.gd"
+	"res://tests/fixtures/injection_targets/no_argument_method.gd"
 )
 const ServicesNode := preload(
 	"res://tests/fixtures/injection_targets/recording_services_node.gd"
@@ -20,7 +20,7 @@ const FailedResolutionNode := preload(
 	"res://tests/fixtures/injection_targets/recording_failed_resolution_node.gd"
 )
 const NoMethodNode := preload(
-	"res://tests/fixtures/injection_targets/node_without_injection_method.gd"
+	"res://tests/fixtures/injection_targets/no_injection_method.gd"
 )
 
 var _runner := TestRunner.new(true)
