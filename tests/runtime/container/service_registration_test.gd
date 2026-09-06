@@ -14,10 +14,8 @@ func _init() -> void:
 	_test_create_class_registration()
 	_test_create_instance_registration()
 	_test_fluent_updates()
-	_test_valid_inheritance()
-	_test_invalid_inheritance()
 	_test_missing_types_and_invalid_lifecycle()
-	_test_unnamed_types()
+	_test_unnamed_type()
 	_test_unrelated_registration()
 	_test_valid_registration()
 	_test_lifecycle_helpers()
@@ -69,32 +67,6 @@ func _test_fluent_updates() -> void:
 	_expect(registration.key == &"primary", "with_keyは登録キーを更新する")
 
 
-func _test_valid_inheritance() -> void:
-	_runner.change_test_name("valid_inheritance")
-	# 同じ型は自分自身を満たし、派生実装は基底の公開契約を満たします。
-	_expect(
-		ServiceRegistration.check_inheritance(BaseService, BaseService),
-		"実装型自身への継承判定が成功する",
-	)
-	_expect(
-		ServiceRegistration.check_inheritance(DerivedService, BaseService),
-		"派生型から基底型への継承判定が成功する",
-	)
-
-
-func _test_invalid_inheritance() -> void:
-	_runner.change_test_name("invalid_inheritance")
-	# 無関係な型と、基底から派生という逆向きの判定はいずれも拒否されます。
-	_expect(
-		not ServiceRegistration.check_inheritance(UnrelatedService, BaseService),
-		"無関係な型の継承判定が失敗する",
-	)
-	_expect(
-		not ServiceRegistration.check_inheritance(BaseService, DerivedService),
-		"逆方向の継承判定が失敗する",
-	)
-
-
 func _test_missing_types_and_invalid_lifecycle() -> void:
 	_runner.change_test_name("missing_types_and_invalid_lifecycle")
 	# 必須型の欠落と未知のライフサイクルを拒否し、検証前の登録内容を維持します。
@@ -112,16 +84,17 @@ func _test_missing_types_and_invalid_lifecycle() -> void:
 	_expect_validation_rejected_without_mutation(invalid_lifecycle, "ライフサイクルが不正です: UNKNOWN(999)")
 
 
-func _test_unnamed_types() -> void:
-	_runner.change_test_name("unnamed_types")
-	# Godotのグローバルクラス名を持たないスクリプトは、実装型でも公開型でも拒否されます。
-	var unnamed_implementation := _valid_registration()
-	unnamed_implementation.implementation_type = UnnamedService
-	_expect_validation_rejected_without_mutation(unnamed_implementation, "生成するクラスにはclass_nameが必要です")
+func _test_unnamed_type() -> void:
+	_runner.change_test_name("unnamed_type")
+	# Scriptそのものを解決キーに使うため、グローバルクラス名がない型も登録できます。
+	var registration := ServiceRegistration.create_class_registration(
+		UnnamedService,
+		Lifecycle.Type.TRANSIENT,
+	)
+	var errors: PackedStringArray = registration.validate()
 
-	var unnamed_service := _valid_registration()
-	unnamed_service.service_type = UnnamedService
-	_expect_validation_rejected_without_mutation(unnamed_service, "公開するクラスにはclass_nameが必要です")
+	_expect(errors.is_empty(), "class_nameのないScriptを正常な登録として扱う")
+	_expect(registration.service_name.is_empty(), "class_nameのない公開型のサービス名は空になる")
 
 
 func _test_unrelated_registration() -> void:

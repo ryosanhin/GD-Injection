@@ -137,7 +137,7 @@ func _test_resolved_reference_and_success_state() -> void:
 	_setup_target(SingleServiceNode.new())
 	var provided := TrackedService.new()
 	_container.register(ServiceRegistration.create_instance_registration(provided, TrackedService))
-	var expected = _container.resolve_with_script(TrackedService)
+	var expected = _container.resolve(TrackedService, &"")
 	var result = _injector().try_inject_arguments(_target)
 
 	_runner.assert_true(result, "注入メソッドを実行できた成功時にtrueを返す")
