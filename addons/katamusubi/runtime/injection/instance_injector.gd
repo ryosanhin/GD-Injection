@@ -32,17 +32,22 @@ func try_inject_arguments(target: Variant) -> bool:
 		args_override_dict = callable.call()
 
 	for argument in arguments:
+		# 実際に渡す型
 		var service_type := argument.service_type
+
+		# 当初メソッド内で宣言されていた型
+		var former_type := service_type
+		
 		var key := argument.arg_name
 
 		# 型のオーバーライドが可能なら実行
 		if args_override_dict.has(key):
-			var override_type := args_override_dict[key]
+			var overrided_type := args_override_dict[key]
 			if service_type == null:
-				service_type = override_type
+				service_type = overrided_type
 			else:
-				if _check_inheritance(override_type, service_type):
-					service_type = override_type
+				if _check_inheritance(overrided_type, former_type):
+					service_type = overrided_type
 
 		if service_type == null:
 			push_error(
