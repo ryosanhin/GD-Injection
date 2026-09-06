@@ -105,7 +105,10 @@ func _initialize_scope() -> bool:
 				"スコープ '%s' (scope_id: '%s') は親スコープ (parent_scope_id: '%s') の初期化に失敗したため初期化できません。"
 				% [scope_name, scope_id, parent_scope_id]
 			)
-			state = State.FAILED
+			# 再帰呼び出しの途中で自身が循環元と判定された場合は、診断用の状態を
+			# FAILED で上書きしない。循環元を待っていた側は通常どおり FAILED になる。
+			if state != State.CIRCULAR:
+				state = State.FAILED
 			return false
 		# 親スコープのコンテナを取得
 		parent_container = parent_scope._container
