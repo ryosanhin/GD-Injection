@@ -31,10 +31,8 @@ func _test_default_resolution() -> void:
 	var container := InjectionContainer.new(null)
 	container.register(_class_registration(TrackedService, Lifecycle.Type.TRANSIENT))
 
-	var by_name = container.resolve_with_string_name(&"TestTrackedService", &"")
-	var by_script = container.resolve_with_script(TrackedService)
-	_runner.assert_true(by_name is TestTrackedService, "文字列名からデフォルト登録を解決する")
-	_runner.assert_true(by_script is TestTrackedService, "Scriptからデフォルト登録を解決する")
+	var resolved = container.resolve(TrackedService, &"")
+	_runner.assert_true(resolved is TestTrackedService, "Scriptからデフォルト登録を解決する")
 
 
 func _test_singleton() -> void:
@@ -42,8 +40,8 @@ func _test_singleton() -> void:
 	TrackedService.reset_generation_count()
 	var container := InjectionContainer.new(null)
 	container.register(_class_registration(TrackedService, Lifecycle.Type.SINGLETON))
-	var first = container.resolve_with_script(TrackedService)
-	var second = container.resolve_with_script(TrackedService)
+	var first = container.resolve(TrackedService, &"")
+	var second = container.resolve(TrackedService, &"")
 
 	_runner.assert_same(second, first, "Singletonは同じ参照を返す")
 	_runner.assert_equal(TrackedService.generation_count, 1, "Singletonを一度だけ生成する")
@@ -53,8 +51,8 @@ func _test_transient() -> void:
 	_runner.change_test_name("transient")
 	var container := InjectionContainer.new(null)
 	container.register(_class_registration(TrackedService, Lifecycle.Type.TRANSIENT))
-	var first = container.resolve_with_script(TrackedService)
-	var second = container.resolve_with_script(TrackedService)
+	var first = container.resolve(TrackedService, &"")
+	var second = container.resolve(TrackedService, &"")
 
 	_runner.assert_true(not is_same(second, first), "Transientは異なる参照を返す")
 	_runner.assert_not_equal(second.instance_id, first.instance_id, "Transientごとに異なるIDを付ける")
@@ -66,8 +64,8 @@ func _test_instance_registration() -> void:
 	var provided := TrackedService.new()
 	container.register(ServiceRegistration.create_instance_registration(provided, TrackedService))
 
-	_runner.assert_same(container.resolve_with_script(TrackedService), provided, "提供された参照を返す")
-	_runner.assert_same(container.resolve_with_script(TrackedService), provided, "再解決でも提供された参照を返す")
+	_runner.assert_same(container.resolve(TrackedService, &""), provided, "提供された参照を返す")
+	_runner.assert_same(container.resolve(TrackedService, &""), provided, "再解決でも提供された参照を返す")
 
 
 func _test_key_precedence_and_default_fallback() -> void:
@@ -78,8 +76,8 @@ func _test_key_precedence_and_default_fallback() -> void:
 	container.register(_instance_as(default_service, DerivedService, BaseService))
 	container.register(_instance_as(keyed_service, DerivedService, BaseService, &"primary"))
 
-	_runner.assert_same(container.resolve_with_script(BaseService, &"primary"), keyed_service, "同じキーの登録を優先する")
-	_runner.assert_same(container.resolve_with_script(BaseService, &"missing"), default_service, "不明なキーはローカルのデフォルトへフォールバックする")
+	_runner.assert_same(container.resolve(BaseService, &"primary"), keyed_service, "同じキーの登録を優先する")
+	_runner.assert_same(container.resolve(BaseService, &"missing"), default_service, "不明なキーはローカルのデフォルトへフォールバックする")
 
 
 func _test_parent_lookup_order() -> void:
@@ -92,10 +90,10 @@ func _test_parent_lookup_order() -> void:
 	parent.register(_instance_as(parent_default, DerivedService, BaseService))
 	parent.register(_instance_as(parent_keyed, DerivedService, BaseService, &"primary"))
 
-	_runner.assert_same(child.resolve_with_script(BaseService, &"primary"), parent_keyed, "要求キーを維持して親から解決する")
+	_runner.assert_same(child.resolve(BaseService, &"primary"), parent_keyed, "要求キーを維持して親から解決する")
 	child.register(_instance_as(child_default, DerivedService, BaseService))
-	_runner.assert_same(child.resolve_with_script(BaseService), child_default, "子のローカル登録が親の同一登録を上書きする")
-	_runner.assert_same(child.resolve_with_script(BaseService, &"primary"), child_default, "子のデフォルトを親のキー付き登録より優先する")
+	_runner.assert_same(child.resolve(BaseService, &""), child_default, "子のローカル登録が親の同一登録を上書きする")
+	_runner.assert_same(child.resolve(BaseService, &"primary"), parent_keyed, "親のキー付き登録を子のデフォルトより優先する")
 
 
 func _test_duplicate_registrations() -> void:
@@ -110,7 +108,7 @@ func _test_duplicate_registrations() -> void:
 	container.register(_instance_as(rejected, DerivedService, BaseService, &"same"))
 	capture.stop()
 	_runner.assert_true(capture.contains("登録が重複しています"), "重複登録がpush_errorを発生させる")
-	_runner.assert_same(container.resolve_with_script(BaseService, &"same"), first, "先に登録したサービスを維持する")
+	_runner.assert_same(container.resolve(BaseService, &"same"), first, "先に登録したサービスを維持する")
 
 
 func _test_key_scopes() -> void:
@@ -123,9 +121,9 @@ func _test_key_scopes() -> void:
 	container.register(_instance_as(second, DerivedService, BaseService, &"second"))
 	container.register(ServiceRegistration.create_instance_registration(unrelated, UnrelatedService).with_key(&"first"))
 
-	_runner.assert_same(container.resolve_with_script(BaseService, &"first"), first, "同じ契約型の第一キーを解決する")
-	_runner.assert_same(container.resolve_with_script(BaseService, &"second"), second, "同じ契約型の異なるキーが併存する")
-	_runner.assert_same(container.resolve_with_script(UnrelatedService, &"first"), unrelated, "異なる契約型で同じキーを使用する")
+	_runner.assert_same(container.resolve(BaseService, &"first"), first, "同じ契約型の第一キーを解決する")
+	_runner.assert_same(container.resolve(BaseService, &"second"), second, "同じ契約型の異なるキーが併存する")
+	_runner.assert_same(container.resolve(UnrelatedService, &"first"), unrelated, "異なる契約型で同じキーを使用する")
 
 
 func _test_invalid_registration() -> void:
@@ -135,7 +133,7 @@ func _test_invalid_registration() -> void:
 	var capture := ErrorCapture.new()
 	capture.start()
 	container.register(invalid)
-	var result = container.resolve_with_string_name(&"", &"")
+	var result = container.resolve(BaseService, &"")
 	capture.stop()
 
 	_runner.assert_true(capture.contains("登録情報が不正です"), "不正登録がpush_errorを発生させる")
@@ -148,7 +146,7 @@ func _test_unregistered_service() -> void:
 	var container := InjectionContainer.new(null)
 	var capture := ErrorCapture.new()
 	capture.start()
-	var result = container.resolve_with_script(BaseService)
+	var result = container.resolve(BaseService, &"")
 	capture.stop()
 
 	_runner.assert_true(capture.contains("登録が見つかりません"), "未登録解決がpush_errorを発生させる")
@@ -161,7 +159,7 @@ func _test_clear() -> void:
 	var child := InjectionContainer.new(parent)
 	parent.register(_class_registration(TrackedService, Lifecycle.Type.SINGLETON))
 	child.register(_instance_as(DerivedService.new(), DerivedService, BaseService))
-	var singleton = parent.resolve_with_script(TrackedService)
+	var singleton = parent.resolve(TrackedService, &"")
 	var singleton_weak: WeakRef = weakref(singleton)
 	singleton = null
 	child.clear()
@@ -169,8 +167,8 @@ func _test_clear() -> void:
 
 	var capture := ErrorCapture.new()
 	capture.start()
-	var local_result = child.resolve_with_script(BaseService)
-	var parent_result = child.resolve_with_script(TrackedService)
+	var local_result = child.resolve(BaseService, &"")
+	var parent_result = child.resolve(TrackedService, &"")
 	capture.stop()
 	_runner.assert_null(local_result, "clear後はローカル登録を利用できない")
 	_runner.assert_null(parent_result, "clear後は親参照を利用できない")
@@ -186,8 +184,8 @@ func _test_empty_and_nonempty_keys_do_not_collide() -> void:
 	container.register(_instance_as(default_service, DerivedService, BaseService))
 	container.register(_instance_as(keyed_service, DerivedService, BaseService, &"TestBaseService"))
 
-	_runner.assert_same(container.resolve_with_script(BaseService), default_service, "空IDの登録を独立して解決する")
-	_runner.assert_same(container.resolve_with_script(BaseService, &"TestBaseService"), keyed_service, "通常IDの登録を独立して解決する")
+	_runner.assert_same(container.resolve(BaseService, &""), default_service, "空IDの登録を独立して解決する")
+	_runner.assert_same(container.resolve(BaseService, &"TestBaseService"), keyed_service, "通常IDの登録を独立して解決する")
 
 
 func _class_registration(type: Script, lifecycle: Lifecycle.Type) -> ServiceRegistration:

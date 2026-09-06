@@ -122,15 +122,15 @@ func _clear_observed_nodes() -> void:
 
 func on_filesystem_changed() -> void:
 	var removed_scene_uids: Dictionary[StringName, bool] = {}
-	for definition in _scope_index.scope_snapshots:
-		var path := ResourceUID.uid_to_path(definition.scene_uid)
+	for snapshot in _scope_index.scope_snapshots:
+		var path := ResourceUID.ensure_path(snapshot.scene_uid)
 
 		# 削除されていた場合
-		if not FileAccess.file_exists(path):
-			removed_scene_uids[definition.scene_uid] = true
+		if path.is_empty() or not FileAccess.file_exists(path):
+			removed_scene_uids[snapshot.scene_uid] = true
 
 	for scene_uid in removed_scene_uids:
-		var empty_snapshots: Array[ScopeDefinition] = []
+		var empty_snapshots: Array[ScopeSnapshot] = []
 		var rollback_action := _scope_index.replace_scene_snapshots(
 				scene_uid,
 				empty_snapshots,
@@ -150,16 +150,7 @@ func on_scene_saved(path: String) -> void:
 		push_error("シーン %s が読み込めませんでした。" % path)
 		return
 	
-	var snapshots: Array[ScopeDefinition] = []
-	for scanned_entry in snapshot.entries:
-		snapshots.append(ScopeDefinition.new(
-				scanned_entry.scene_uid,
-				scanned_entry.scope_name,
-				scanned_entry.scope_id,
-				scanned_entry.parent_scope_id,
-		))
-
-	var rollback_action := _scope_index.replace_scene_snapshots(scene_uid, snapshots)
+	var rollback_action := _scope_index.replace_scene_snapshots(scene_uid, snapshot.entries)
 	if not rollback_action.operation_succeeded:
 		return
 
