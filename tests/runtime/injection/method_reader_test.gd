@@ -101,4 +101,4 @@ func _test_argument_data_string() -> void:
 
 ## MethodReaderを使って引数を取得
 func _read(script: Script) -> Array[ArgumentData]:
-	return MethodReader.new(Const.METHOD_NAME).get_injection_arguments(script)
+	return MethodReader.new(Const.INJECTION_METHOD_NAME).get_injection_arguments(script)
