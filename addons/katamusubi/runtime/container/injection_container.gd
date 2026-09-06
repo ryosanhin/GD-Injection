@@ -2,13 +2,13 @@ extends RefCounted
 class_name InjectionContainer
 
 const ResolveEntry := preload("resolve_entry.gd")
+const ResolveEntryCollection := preload("resolve_entry_collection.gd")
 
 ## 親スコープのコンテナです。ローカルで見つからない依存を親へ問い合わせ
 var _parent: InjectionContainer
 
-## 「公開型class_name + ID」をキーにしたローカル登録
-## Dictionary は内部的には Dictionary[String, ResolveEntry]
-var _entries: Dictionary[Script, Dictionary] = {}
+## 公開型ごとのローカル登録コレクション
+var _entries: Dictionary[Script, ResolveEntryCollection] = {}
 
 ## 任意の親コンテナを指定してスコープを生成
 func _init(parent: InjectionContainer) -> void:
@@ -24,9 +24,9 @@ func register(registration: ServiceRegistration) -> void:
 		return
 
 	if not _entries.has(registration.service_type):
-		_entries[registration.service_type] = {}
-	
-	var entries: Dictionary[String, ResolveEntry] = _entries[registration.service_type]
+		_entries[registration.service_type] = ResolveEntryCollection.new()
+
+	var entries: ResolveEntryCollection = _entries[registration.service_type]
 
 	if entries.has(registration.key):
 		push_error(
@@ -37,7 +37,7 @@ func register(registration: ServiceRegistration) -> void:
 		)
 		return
 
-	entries[registration.key] = ResolveEntry.new(registration)
+	entries.register(registration.key, ResolveEntry.new(registration))
 
 
 func resolve(
@@ -68,11 +68,10 @@ func find_resolve_entry(
 	service_type: Script,
 	key: StringName,
 ) -> ResolveEntry:
-	var extracted_entries: Dictionary[String, ResolveEntry] = _entries.get(service_type, {})
+	var extracted_entries: ResolveEntryCollection = _entries.get(service_type)
 
-	if not extracted_entries.is_empty():
-		if extracted_entries.has(key):
-			return extracted_entries[key]
+	if extracted_entries != null and extracted_entries.has(key):
+		return extracted_entries.find(key)
 
 	if _parent != null:
 		return _parent.find_resolve_entry(service_type, key)
@@ -82,9 +81,7 @@ func find_resolve_entry(
 
 ## Singleton参照とローカル登録を解放します。
 func clear() -> void:
-	for entries: Dictionary[String, ResolveEntry] in _entries.values():
-		for entry: ResolveEntry in entries.values():
-			entry.clear()
+	for entries: ResolveEntryCollection in _entries.values():
 		entries.clear()
 	_entries.clear()
 	_parent = null
