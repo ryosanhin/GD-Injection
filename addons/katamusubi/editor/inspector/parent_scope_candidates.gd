@@ -15,8 +15,8 @@ func _init(init_scope_index: ScopeIndex) -> void:
 func get_candidates(
 	target: ContainerScope,
 	scene_root: Node,
-) -> Array[ScopeDefinition]:
-	var candidates: Array[ScopeDefinition] = []
+) -> Array[ScopeSnapshot]:
+	var candidates: Array[ScopeSnapshot] = []
 	if not _is_target_in_edited_scene(target, scene_root):
 		return candidates
 
@@ -31,7 +31,7 @@ func get_candidates(
 	for scope in _get_edited_scene_scopes(scene_root):
 		if scope.scope_id.is_empty():
 			continue
-		candidates.append(ScopeDefinition.new(
+		candidates.append(ScopeSnapshot.new(
 			edited_scene_uid,
 			scope.name,
 			scope.scope_id,
@@ -45,7 +45,7 @@ func get_candidate(
 	scope_id: StringName,
 	target: ContainerScope,
 	scene_root: Node,
-) -> ScopeDefinition:
+) -> ScopeSnapshot:
 	for candidate in get_candidates(target, scene_root):
 		if candidate.scope_id == scope_id:
 			return candidate
@@ -77,7 +77,7 @@ func _is_target_in_edited_scene(target: ContainerScope, scene_root: Node) -> boo
 	if scene_root == null:
 		push_error("編集中のシーンがありません。")
 		return false
-	if target != scene_root and not scene_root.is_ancestor_of(target):
+	if target != scene_root and target.owner != scene_root:
 		push_error("コンテナスコープは編集中のシーンに属していません。")
 		return false
 

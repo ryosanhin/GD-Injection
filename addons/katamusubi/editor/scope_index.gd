@@ -5,7 +5,7 @@ extends Resource
 ## 正本は保存済みシーン内の[ContainerScope]であり、このリソースは再生成可能。
 
 @export_file var save_path: String
-@export var scope_snapshots: Array[ScopeDefinition] = []
+@export var scope_snapshots: Array[ScopeSnapshot] = []
 
 const RollbackAction := preload("utility/rollback_action.gd")
 
@@ -15,9 +15,9 @@ const RollbackAction := preload("utility/rollback_action.gd")
 ## 成功時に返す操作は、置換前の定義の複製を使って状態を完全に復元する。
 func replace_scene_snapshots(
 	scene_uid: StringName,
-	snapshots: Array[ScopeDefinition],
+	snapshots: Array[ScopeSnapshot],
 ) -> RollbackAction:
-	var replacements: Array[ScopeDefinition] = []
+	var replacements: Array[ScopeSnapshot] = []
 
 	# HashSet<T> 的なものが無いので辞書型で代替
 	## 他のシーンで使われているスコープID
@@ -49,7 +49,7 @@ func replace_scene_snapshots(
 		replacements.append(_duplicate_snapshot(snapshot))
 
 	var original_snapshots := _duplicate_snapshots(scope_snapshots)
-	var retained_snapshots: Array[ScopeDefinition] = []
+	var retained_snapshots: Array[ScopeSnapshot] = []
 	
 	for snapshot in scope_snapshots:
 		# 変更を適用するシーン以外のデータはそのままコピー
@@ -67,28 +67,23 @@ func replace_scene_snapshots(
 
 
 func _duplicate_snapshots(
-	snapshots: Array[ScopeDefinition],
-) -> Array[ScopeDefinition]:
-	var duplicates: Array[ScopeDefinition] = []
+	snapshots: Array[ScopeSnapshot],
+) -> Array[ScopeSnapshot]:
+	var duplicates: Array[ScopeSnapshot] = []
 	for snapshot in snapshots:
 		duplicates.append(_duplicate_snapshot(snapshot))
 	return duplicates
 
 
-func _duplicate_snapshot(snapshot: ScopeDefinition) -> ScopeDefinition:
-	return ScopeDefinition.new(
-		snapshot.scene_uid,
-		snapshot.scope_name,
-		snapshot.scope_id,
-		snapshot.parent_scope_id,
-	)
+func _duplicate_snapshot(snapshot: ScopeSnapshot) -> ScopeSnapshot:
+	return snapshot.to_saved_snapshot()
 
 
 ## スコープIDの一覧を生成
 func get_current_id_list() -> Array[StringName]:
 	var current_id_list: Array[StringName] = []
 	var tmp_list := scope_snapshots.map(
-			func(snapshot: ScopeDefinition) -> StringName: return snapshot.scope_id
+			func(snapshot: ScopeSnapshot) -> StringName: return snapshot.scope_id
 	)
 	current_id_list.assign(tmp_list)
 	return current_id_list
@@ -96,7 +91,7 @@ func get_current_id_list() -> Array[StringName]:
 
 ## スコープIDから該当するスコープ定義を取得[br]
 ## 存在しない場合は[code]null[/code]を返す
-func get_scope_snapshot(scope_id: StringName) -> ScopeDefinition:
+func get_scope_snapshot(scope_id: StringName) -> ScopeSnapshot:
 	for snapshot in scope_snapshots:
 		if snapshot.scope_id == scope_id:
 			return snapshot
@@ -104,7 +99,7 @@ func get_scope_snapshot(scope_id: StringName) -> ScopeDefinition:
 
 
 func save() -> Error:
-	var path := ResourceUID.uid_to_path(save_path)
+	var path := ResourceUID.ensure_path(save_path)
 	if path.is_empty():
 		return Error.FAILED
 	return ResourceSaver.save(self, path)
