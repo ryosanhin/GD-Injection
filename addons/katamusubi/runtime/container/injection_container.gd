@@ -4,10 +4,10 @@ class_name InjectionContainer
 const ResolveEntry := preload("resolve_entry.gd")
 const ResolveEntryMap := preload("resolve_entry_map.gd")
 
-## 親スコープのコンテナです。ローカルで見つからない依存を親へ問い合わせ
+## 親スコープのコンテナです。このコンテナ内で見つからない依存を親へ問い合わせ
 var _parent_container: InjectionContainer
 
-## 公開型ごとのローカル登録コレクション
+## 公開型ごとのこのコンテナ内での登録コレクション
 var _entry_maps_by_service_type: Dictionary[Script, ResolveEntryMap] = {}
 
 ## 任意の親コンテナを指定してスコープを生成
@@ -68,10 +68,10 @@ func find_resolve_entry(
 	service_type: Script,
 	key: StringName,
 ) -> ResolveEntry:
-	var local_entry_map: ResolveEntryMap = _entry_maps_by_service_type.get(service_type)
-
-	if local_entry_map != null and local_entry_map.has(key):
-		return local_entry_map.find(key)
+	if _entry_maps_by_service_type.has(service_type):
+		var entry_map := _entry_maps_by_service_type[service_type]
+		if entry_map.has(key):
+			return entry_map.find(key)
 
 	if _parent_container != null:
 		return _parent_container.find_resolve_entry(service_type, key)
