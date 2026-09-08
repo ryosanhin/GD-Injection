@@ -4,7 +4,7 @@ const Const := preload("res://addons/katamusubi/katamusubi_global.gd")
 const ContainerScopeScript := preload(
 	"res://addons/katamusubi/runtime/scope/container_scope.gd"
 )
-const ScopeFixture := preload("res://tests/fixtures/scopes/test_container_scope.gd")
+const TestContainerScope := preload("res://tests/fixtures/scopes/test_container_scope.gd")
 const BasicScopeScene := preload("res://tests/fixtures/scopes/basic_scope.tscn")
 const ParentChildScene := preload(
 	"res://tests/fixtures/scopes/parent_child_scopes.tscn"
@@ -25,28 +25,28 @@ var _runner := TestRunner.new(true)
 
 func _init() -> void:
 	await process_frame
-	await _test_root_scope_initialization()
-	await _test_registration_once_per_initialization()
-	await _test_reinitialization_is_idempotent()
-	await _test_parent_initializes_before_child()
-	await _test_parent_service_resolution()
-	await _test_child_registration_precedence()
-	await _test_empty_parent_id_skips_lookup()
-	await _test_missing_parent_fails()
-	await _test_duplicate_parent_fails()
-	await _test_circular_parent_relationship()
-	await _test_parent_failure_propagates_to_child()
-	await _test_injection_failure_clears_container()
-	await _test_exit_tree_resets_scope()
-	await _test_targets_are_injected_in_array_order()
-	await _test_injection_stops_at_first_failure()
+	await _test_root_scope_initialization_async()
+	await _test_registration_once_per_initialization_async()
+	await _test_reinitialization_is_idempotent_async()
+	await _test_parent_initializes_before_child_async()
+	await _test_parent_service_resolution_async()
+	await _test_child_registration_precedence_async()
+	await _test_empty_parent_id_skips_lookup_async()
+	await _test_missing_parent_fails_async()
+	await _test_duplicate_parent_fails_async()
+	await _test_circular_parent_relationship_async()
+	await _test_parent_failure_propagates_to_child_async()
+	await _test_injection_failure_clears_container_async()
+	await _test_exit_tree_resets_scope_async()
+	await _test_targets_are_injected_in_array_order_async()
+	await _test_injection_stops_at_first_failure_async()
 
 	await _runner.finish(self, "ContainerScope")
 
 
-func _test_root_scope_initialization() -> void:
+func _test_root_scope_initialization_async() -> void:
 	_runner.change_test_name("root_scope_initialization")
-	var manual: TestContainerScope = ScopeFixture.new()
+	var manual: TestContainerScope = TestContainerScope.new()
 	_runner.assert_true(manual.initialize_for_test(), "親なしスコープを明示的に初期化できる")
 	_runner.assert_equal(manual.state, ContainerScopeScript.State.INITIALIZED, "明示初期化でINITIALIZEDになる")
 	manual.free()
@@ -57,7 +57,7 @@ func _test_root_scope_initialization() -> void:
 	await _free_node(scene_scope)
 
 
-func _test_registration_once_per_initialization() -> void:
+func _test_registration_once_per_initialization_async() -> void:
 	_runner.change_test_name("registration_once_per_initialization")
 	var scope: TestContainerScope = BasicScopeScene.instantiate()
 	root.add_child(scope)
@@ -65,10 +65,10 @@ func _test_registration_once_per_initialization() -> void:
 	await _free_node(scope)
 
 
-func _test_reinitialization_is_idempotent() -> void:
+func _test_reinitialization_is_idempotent_async() -> void:
 	_runner.change_test_name("reinitialization_is_idempotent")
 	var target = NoArgumentsTarget.new()
-	var scope := _scope(&"scope")
+	var scope := _get_new_container_scope(&"scope")
 	var holder := _holder_with([target, scope])
 	scope._inject_target.assign([target])
 	root.add_child(holder)
@@ -78,7 +78,7 @@ func _test_reinitialization_is_idempotent() -> void:
 	await _free_node(holder)
 
 
-func _test_parent_initializes_before_child() -> void:
+func _test_parent_initializes_before_child_async() -> void:
 	_runner.change_test_name("parent_initializes_before_child")
 	var pair = ParentChildScene.instantiate()
 	var child: TestContainerScope = pair.get_node("Child")
@@ -90,31 +90,31 @@ func _test_parent_initializes_before_child() -> void:
 	await _free_node(pair)
 
 
-func _test_parent_service_resolution() -> void:
+func _test_parent_service_resolution_async() -> void:
 	_runner.change_test_name("parent_service_resolution")
-	var parent := _scope(&"parent", &"", &"parent_only")
-	var child := _scope(&"child", &"parent", &"child_only")
+	var parent := _get_new_container_scope(&"parent", &"", &"parent_only")
+	var child := _get_new_container_scope(&"child", &"parent", &"child_only")
 	var holder := _holder_with([child, parent])
 	root.add_child(holder)
 	_runner.assert_same(child.resolve_for_test(BaseService, &"parent_only"), parent.registered_service, "子から親だけの登録を解決する")
 	await _free_node(holder)
 
 
-func _test_child_registration_precedence() -> void:
+func _test_child_registration_precedence_async() -> void:
 	_runner.change_test_name("child_registration_precedence")
-	var parent := _scope(&"parent", &"", &"shared")
-	var child := _scope(&"child", &"parent", &"shared")
+	var parent := _get_new_container_scope(&"parent", &"", &"shared")
+	var child := _get_new_container_scope(&"child", &"parent", &"shared")
 	var holder := _holder_with([child, parent])
 	root.add_child(holder)
 	_runner.assert_same(child.resolve_for_test(BaseService, &"shared"), child.registered_service, "同じ型とキーでは子の登録を優先する")
 	await _free_node(holder)
 
 
-func _test_empty_parent_id_skips_lookup() -> void:
+func _test_empty_parent_id_skips_lookup_async() -> void:
 	_runner.change_test_name("empty_parent_id_skips_lookup")
-	var unrelated_a := _scope(&"candidate")
-	var unrelated_b := _scope(&"candidate")
-	var scope := _scope(&"independent")
+	var unrelated_a := _get_new_container_scope(&"candidate")
+	var unrelated_b := _get_new_container_scope(&"candidate")
+	var scope := _get_new_container_scope(&"independent")
 	var holder := _holder_with([scope, unrelated_a, unrelated_b])
 	root.add_child(holder)
 	_runner.assert_equal(scope.state, ContainerScopeScript.State.INITIALIZED, "親IDが空なら候補数にかかわらず初期化する")
@@ -122,9 +122,9 @@ func _test_empty_parent_id_skips_lookup() -> void:
 	await _free_node(holder)
 
 
-func _test_missing_parent_fails() -> void:
+func _test_missing_parent_fails_async() -> void:
 	_runner.change_test_name("missing_parent_fails")
-	var scope := _scope(&"child", &"missing")
+	var scope := _get_new_container_scope(&"child", &"missing")
 	var capture := ErrorCapture.new()
 	capture.start()
 	root.add_child(scope)
@@ -135,10 +135,10 @@ func _test_missing_parent_fails() -> void:
 	await _free_node(scope)
 
 
-func _test_duplicate_parent_fails() -> void:
+func _test_duplicate_parent_fails_async() -> void:
 	_runner.change_test_name("duplicate_parent_fails")
-	var child := _scope(&"child", &"duplicate")
-	var holder := _holder_with([child, _scope(&"duplicate"), _scope(&"duplicate")])
+	var child := _get_new_container_scope(&"child", &"duplicate")
+	var holder := _holder_with([child, _get_new_container_scope(&"duplicate"), _get_new_container_scope(&"duplicate")])
 	var capture := ErrorCapture.new()
 	capture.start()
 	root.add_child(holder)
@@ -148,10 +148,10 @@ func _test_duplicate_parent_fails() -> void:
 	await _free_node(holder)
 
 
-func _test_circular_parent_relationship() -> void:
+func _test_circular_parent_relationship_async() -> void:
 	_runner.change_test_name("circular_parent_relationship")
-	var scope_a := _scope(&"a", &"b")
-	var scope_b := _scope(&"b", &"a")
+	var scope_a := _get_new_container_scope(&"a", &"b")
+	var scope_b := _get_new_container_scope(&"b", &"a")
 	var holder := _holder_with([scope_a, scope_b])
 	var capture := ErrorCapture.new()
 	capture.start()
@@ -163,10 +163,10 @@ func _test_circular_parent_relationship() -> void:
 	await _free_node(holder)
 
 
-func _test_parent_failure_propagates_to_child() -> void:
+func _test_parent_failure_propagates_to_child_async() -> void:
 	_runner.change_test_name("parent_failure_propagates_to_child")
-	var parent := _scope(&"parent", &"missing")
-	var child := _scope(&"child", &"parent")
+	var parent := _get_new_container_scope(&"parent", &"missing")
+	var child := _get_new_container_scope(&"child", &"parent")
 	var holder := _holder_with([child, parent])
 	var capture := ErrorCapture.new()
 	capture.start()
@@ -178,10 +178,10 @@ func _test_parent_failure_propagates_to_child() -> void:
 	await _free_node(holder)
 
 
-func _test_injection_failure_clears_container() -> void:
+func _test_injection_failure_clears_container_async() -> void:
 	_runner.change_test_name("injection_failure_clears_container")
 	var failed_target = MissingMethodTarget.new()
-	var scope := _scope(&"scope")
+	var scope := _get_new_container_scope(&"scope")
 	scope._inject_target.assign([failed_target])
 	var holder := _holder_with([failed_target, scope])
 	var capture := ErrorCapture.new()
@@ -193,23 +193,23 @@ func _test_injection_failure_clears_container() -> void:
 	await _free_node(holder)
 
 
-func _test_exit_tree_resets_scope() -> void:
+func _test_exit_tree_resets_scope_async() -> void:
 	_runner.change_test_name("exit_tree_resets_scope")
 	var scope: TestContainerScope = BasicScopeScene.instantiate()
 	root.add_child(scope)
 	root.remove_child(scope)
 	_runner.assert_equal(scope.state, ContainerScopeScript.State.NOT_INITIALIZED, "_exit_tree後にNOT_INITIALIZEDへ戻る")
 	_runner.assert_false(scope.has_container(), "_exit_tree後にコンテナを破棄する")
-	scope.free()
+	await _free_node(scope)
 
 
-func _test_targets_are_injected_in_array_order() -> void:
+func _test_targets_are_injected_in_array_order_async() -> void:
 	_runner.change_test_name("targets_are_injected_in_array_order")
 	var order: Array[StringName] = []
 	var first := _recording_target(&"first", order)
 	var second := _recording_target(&"second", order)
 	var third := _recording_target(&"third", order)
-	var scope := _scope(&"scope")
+	var scope := _get_new_container_scope(&"scope")
 	scope._inject_target.assign([first, second, third])
 	var holder := _holder_with([first, second, third, scope])
 	root.add_child(holder)
@@ -217,13 +217,13 @@ func _test_targets_are_injected_in_array_order() -> void:
 	await _free_node(holder)
 
 
-func _test_injection_stops_at_first_failure() -> void:
+func _test_injection_stops_at_first_failure_async() -> void:
 	_runner.change_test_name("injection_stops_at_first_failure")
 	var order: Array[StringName] = []
 	var first := _recording_target(&"first", order)
 	var failed := MissingMethodTarget.new()
 	var skipped := _recording_target(&"skipped", order)
-	var scope := _scope(&"scope")
+	var scope := _get_new_container_scope(&"scope")
 	scope._inject_target.assign([first, failed, skipped])
 	var holder := _holder_with([first, failed, skipped, scope])
 	var capture := ErrorCapture.new()
@@ -235,8 +235,8 @@ func _test_injection_stops_at_first_failure() -> void:
 	await _free_node(holder)
 
 
-func _scope(id: StringName, parent_id: StringName = &"", key: StringName = &"") -> TestContainerScope:
-	var scope: TestContainerScope = ScopeFixture.new()
+func _get_new_container_scope(id: StringName, parent_id: StringName = &"", key: StringName = &"") -> TestContainerScope:
+	var scope := TestContainerScope.new()
 	scope.scope_id = id
 	scope.parent_scope_id = parent_id
 	scope.registration_key = key
