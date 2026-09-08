@@ -1,7 +1,7 @@
 extends TestBaseService
+## コンテナが生成した回数と、各インスタンスを識別する番号を記録します。
 class_name TestTrackedService
 
-## コンテナが生成した回数と、各インスタンスを識別する番号を記録します。
 static var generation_count := 0
 
 var instance_id: int
