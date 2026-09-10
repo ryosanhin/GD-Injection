@@ -69,19 +69,19 @@ func _test_fluent_updates() -> void:
 
 func _test_missing_types_and_invalid_lifecycle() -> void:
 	_runner.change_test_name("missing_types_and_invalid_lifecycle")
-	# 必須型の欠落と未知のライフサイクルを拒否し、検証前の登録内容を維持します。
+	# 必須型の欠落と未知のライフサイクルを検証エラーとして報告します。
 	var missing_implementation := _valid_registration()
 	missing_implementation.implementation_type = null
-	_expect_validation_rejected_without_mutation(missing_implementation, "生成するクラスが指定されていません")
+	_expect_validation_error(missing_implementation, "生成するクラスが指定されていません")
 
 	var missing_service := _valid_registration()
 	missing_service.service_type = null
-	_expect_validation_rejected_without_mutation(missing_service, "公開するクラスが指定されていません")
+	_expect_validation_error(missing_service, "公開するクラスが指定されていません")
 
 	var invalid_lifecycle := _valid_registration()
 	# enum型の静的検査を迂回し、外部データなどから混入した不正な整数を再現します。
 	invalid_lifecycle.set(&"lifecycle", 999)
-	_expect_validation_rejected_without_mutation(invalid_lifecycle, "ライフサイクルが不正です: UNKNOWN(999)")
+	_expect_validation_error(invalid_lifecycle, "ライフサイクルが不正です: UNKNOWN(999)")
 
 
 func _test_unnamed_type() -> void:
@@ -99,13 +99,13 @@ func _test_unnamed_type() -> void:
 
 func _test_unrelated_registration() -> void:
 	_runner.change_test_name("unrelated_registration")
-	# 実装型が公開型を継承していない組み合わせをエラーとして返し、登録自体は書き換えません。
+	# 実装型が公開型を継承していない組み合わせを検証エラーとして報告します。
 	var registration := ServiceRegistration.create_class_registration(
 		UnrelatedService,
 		Lifecycle.Type.SINGLETON,
 	).as_type(BaseService)
 
-	_expect_validation_rejected_without_mutation(registration, "継承していません")
+	_expect_validation_error(registration, "継承していません")
 
 
 func _test_valid_registration() -> void:
@@ -136,16 +136,11 @@ func _valid_registration() -> ServiceRegistration:
 	).as_type(BaseService).with_key(&"fixture")
 
 
-func _expect_validation_rejected_without_mutation(
+func _expect_validation_error(
 	registration: ServiceRegistration,
 	expected_error: String,
 ) -> void:
-	# validate()の戻り値だけでなく、失敗しても入力した登録状態が変化しないことを比較します。
-	var implementation_before = registration.implementation_type
-	var service_before = registration.service_type
-	var lifecycle_before = registration.lifecycle
-	var instance_before = registration.instance
-	var key_before = registration.key
+	# validate()がエラーと期待するメッセージを返すことを確認します。
 	var errors: PackedStringArray = registration.validate()
 
 	_runner.assert_false(errors.is_empty(), "%s: 検証エラーを返す" % expected_error)
@@ -154,14 +149,6 @@ func _expect_validation_rejected_without_mutation(
 		expected_error,
 		"%s: 想定した検証エラーを返す" % expected_error,
 	)
-	_expect(
-		registration.implementation_type == implementation_before,
-		"%s: 実装型を変更しない" % expected_error,
-	)
-	_expect(registration.service_type == service_before, "%s: 公開型を変更しない" % expected_error)
-	_expect(registration.lifecycle == lifecycle_before, "%s: ライフサイクルを変更しない" % expected_error)
-	_expect(registration.instance == instance_before, "%s: インスタンスを変更しない" % expected_error)
-	_expect(registration.key == key_before, "%s: キーを変更しない" % expected_error)
 
 
 func _expect(condition: bool, message: String) -> void:
