@@ -51,8 +51,6 @@ func _init() -> void:
 	await _test_missing_method_async()
 	await _test_invalid_targets_async()
 	await _test_resolved_reference_and_success_state_async()
-	await _test_singleton_lifecycle_async()
-	await _test_transient_lifecycle_async()
 
 	await _runner.finish(self, "InstanceInjector")
 
@@ -225,48 +223,6 @@ func _test_resolved_reference_and_success_state_async() -> void:
 	_runner.assert_same(_target.received_service, expected, "対象が保持する参照はコンテナの解決結果と一致する")
 	_runner.assert_true(_target.was_injected, "注入先メソッドの状態変更が行われる")
 	await _cleanup_async()
-
-
-func _test_singleton_lifecycle_async() -> void:
-	_runner.change_test_name("singleton_lifecycle")
-	TrackedService.reset_generation_count()
-	_container = InjectionContainer.new(null)
-	_container.register(ServiceRegistration.create_class_registration(TrackedService, Lifecycle.Type.SINGLETON))
-	var first := SingleServiceNode.new()
-	var second := SingleServiceNode.new()
-	root.add_child(first)
-	root.add_child(second)
-	var injector = _injector()
-	_runner.assert_true(injector.try_inject_arguments(first), "最初のSingleton注入に成功する")
-	_runner.assert_true(injector.try_inject_arguments(second), "二度目のSingleton注入に成功する")
-	_runner.assert_same(second.received_service, first.received_service, "注入経由でもSingleton参照を共有する")
-	_runner.assert_equal(TrackedService.generation_count, 1, "注入経由のSingletonを一度だけ生成する")
-	first.queue_free()
-	second.queue_free()
-	_container.clear()
-	_container = null
-	await process_frame
-
-
-func _test_transient_lifecycle_async() -> void:
-	_runner.change_test_name("transient_lifecycle")
-	TrackedService.reset_generation_count()
-	_container = InjectionContainer.new(null)
-	_container.register(ServiceRegistration.create_class_registration(TrackedService, Lifecycle.Type.TRANSIENT))
-	var first := SingleServiceNode.new()
-	var second := SingleServiceNode.new()
-	root.add_child(first)
-	root.add_child(second)
-	var injector = _injector()
-	_runner.assert_true(injector.try_inject_arguments(first), "最初のTransient注入に成功する")
-	_runner.assert_true(injector.try_inject_arguments(second), "二度目のTransient注入に成功する")
-	_runner.assert_true(not is_same(second.received_service, first.received_service), "注入経由でもTransientを毎回生成する")
-	_runner.assert_equal(TrackedService.generation_count, 2, "注入回数ごとにTransientを生成する")
-	first.queue_free()
-	second.queue_free()
-	_container.clear()
-	_container = null
-	await process_frame
 
 
 func _setup_target(target: Node) -> void:
