@@ -22,6 +22,16 @@ const FailedResolutionNode := preload(
 const NoMethodNode := preload(
 	"res://tests/fixtures/injection_targets/no_injection_method.gd"
 )
+const TypeOverridesNode := preload(
+	"res://tests/fixtures/injection_targets/recording_type_overrides_node.gd"
+)
+const KeyedTypeOverrideNode := preload(
+	"res://tests/fixtures/injection_targets/recording_keyed_type_override_node.gd"
+)
+const UntypedNode := preload(
+	"res://tests/fixtures/injection_targets/recording_untyped_node.gd"
+)
+const UnnamedService := preload("res://tests/fixtures/services/unnamed_service.gd")
 
 var _runner := TestRunner.new(true)
 var _container: InjectionContainer
@@ -31,19 +41,23 @@ var _target: Variant
 func _init() -> void:
 	# SceneTreeの初期化を完了し、追加したNodeが即座にツリー内となる状態で検証します。
 	await process_frame
-	await _test_no_arguments()
-	await _test_argument_order_key_precedence_and_fallback()
-	await _test_resolution_failure_is_atomic()
-	await _test_missing_method()
-	await _test_invalid_targets()
-	await _test_resolved_reference_and_success_state()
-	await _test_singleton_lifecycle()
-	await _test_transient_lifecycle()
+	await _test_no_arguments_async()
+	await _test_argument_order_key_precedence_and_fallback_async()
+	await _test_type_overrides_and_normal_resolution_async()
+	await _test_overridden_type_prefers_argument_key_async()
+	await _test_missing_type_override_async()
+	await _test_missing_overridden_type_is_atomic_async()
+	await _test_resolution_failure_is_atomic_async()
+	await _test_missing_method_async()
+	await _test_invalid_targets_async()
+	await _test_resolved_reference_and_success_state_async()
+	await _test_singleton_lifecycle_async()
+	await _test_transient_lifecycle_async()
 
 	await _runner.finish(self, "InstanceInjector")
 
 
-func _test_no_arguments() -> void:
+func _test_no_arguments_async() -> void:
 	_runner.change_test_name("no_arguments")
 	_setup_target(NoArgumentsNode.new())
 	var result = _injector().try_inject_arguments(_target)
@@ -52,10 +66,77 @@ func _test_no_arguments() -> void:
 	_runner.assert_equal(_target.injection_count, 1, "引数なしの注入メソッドを一度だけ呼ぶ")
 	_runner.assert_array(_target.call_order, [&"inject_dependency"], "実際にメソッドが実行された順序を記録する")
 	_runner.assert_true(_target.was_injected, "注入先メソッドによる状態変更を確認する")
-	await _cleanup()
+	await _cleanup_async()
 
 
-func _test_argument_order_key_precedence_and_fallback() -> void:
+func _test_type_overrides_and_normal_resolution_async() -> void:
+	_runner.change_test_name("type_overrides_and_normal_resolution")
+	_setup_target(TypeOverridesNode.new())
+	var local_service := UnnamedService.new()
+	var derived_service := DerivedService.new()
+	var base_service := DerivedService.new()
+	_container.register(ServiceRegistration.create_instance_registration(local_service, UnnamedService))
+	_container.register(ServiceRegistration.create_instance_registration(derived_service, DerivedService))
+	_container.register(_instance_as(base_service))
+	var result = _injector().try_inject_arguments(_target)
+
+	_runner.assert_true(result, "型オーバーライドを含む複数引数をすべて解決できる")
+	_runner.assert_equal(_target.injection_count, 1, "一部をオーバーライドして注入メソッドを一度だけ呼ぶ")
+	_runner.assert_same(_target.received_local_service, local_service, "非グローバルクラスをScript指定で解決する")
+	_runner.assert_same(_target.received_derived_service, derived_service, "宣言型の派生型で解決する")
+	_runner.assert_same(_target.received_base_service, base_service, "無関係な型を採用せず宣言型で解決する")
+	_runner.assert_same(_target.received_normal_service, base_service, "辞書にない引数は通常の宣言型で解決する")
+	await _cleanup_async()
+
+
+func _test_overridden_type_prefers_argument_key_async() -> void:
+	_runner.change_test_name("overridden_type_prefers_argument_key")
+	_setup_target(KeyedTypeOverrideNode.new())
+	var default_service := DerivedService.new()
+	var keyed_service := DerivedService.new()
+	_container.register(ServiceRegistration.create_instance_registration(default_service, DerivedService))
+	_container.register(
+		ServiceRegistration.create_instance_registration(keyed_service, DerivedService)
+			.with_key(&"overridden_service")
+	)
+	var result = _injector().try_inject_arguments(_target)
+
+	_runner.assert_true(result, "オーバーライド後の型を解決できる")
+	_runner.assert_same(_target.received_service, keyed_service, "オーバーライド後も引数名と同じキーを優先する")
+	await _cleanup_async()
+
+
+func _test_missing_type_override_async() -> void:
+	_runner.change_test_name("missing_type_override")
+	_setup_target(UntypedNode.new())
+	var capture := ErrorCapture.new()
+	capture.start()
+	var result = _injector().try_inject_arguments(_target)
+	capture.stop()
+
+	_runner.assert_false(result, "型情報もオーバーライドもなければfalseを返す")
+	_runner.assert_true(capture.contains("型オーバーライドが指定されていません"), "不足した型オーバーライドを報告する")
+	_runner.assert_equal(_target.injection_count, 0, "型を決定できない場合は注入メソッドを呼ばない")
+	await _cleanup_async()
+
+
+func _test_missing_overridden_type_is_atomic_async() -> void:
+	_runner.change_test_name("missing_overridden_type_is_atomic")
+	_setup_target(TypeOverridesNode.new())
+	_container.register(
+		ServiceRegistration.create_instance_registration(UnnamedService.new(), UnnamedService)
+	)
+	var capture := ErrorCapture.new()
+	capture.start()
+	var result = _injector().try_inject_arguments(_target)
+	capture.stop()
+
+	_runner.assert_false(result, "オーバーライド型の登録がなければfalseを返す")
+	_runner.assert_equal(_target.injection_count, 0, "解決済み引数があっても注入メソッドを呼ばない")
+	await _cleanup_async()
+
+
+func _test_argument_order_key_precedence_and_fallback_async() -> void:
 	_runner.change_test_name("argument_order_key_precedence_and_fallback")
 	_setup_target(ServicesNode.new())
 	var default_service := DerivedService.new()
@@ -74,10 +155,10 @@ func _test_argument_order_key_precedence_and_fallback() -> void:
 		"サービスを宣言順に渡してメソッドを完了する",
 	)
 	_runner.assert_true(_target.was_injected, "Callableの有効性だけでなく注入先の状態変更を確認する")
-	await _cleanup()
+	await _cleanup_async()
 
 
-func _test_resolution_failure_is_atomic() -> void:
+func _test_resolution_failure_is_atomic_async() -> void:
 	_runner.change_test_name("resolution_failure_is_atomic")
 	_setup_target(FailedResolutionNode.new())
 	_container.register(_instance_as(DerivedService.new()))
@@ -89,10 +170,10 @@ func _test_resolution_failure_is_atomic() -> void:
 	_runner.assert_false(result, "途中の引数を解決できなければfalseを返す")
 	_runner.assert_equal(_target.injection_count, 0, "一部を解決済みでも注入メソッドを呼ばない")
 	_runner.assert_false(_target.was_injected, "失敗時は注入先の状態を変更しない")
-	await _cleanup()
+	await _cleanup_async()
 
 
-func _test_missing_method() -> void:
+func _test_missing_method_async() -> void:
 	_runner.change_test_name("missing_method")
 	_setup_target(NoMethodNode.new())
 	var capture := ErrorCapture.new()
@@ -103,10 +184,10 @@ func _test_missing_method() -> void:
 	_runner.assert_false(result, "inject_dependencyがないNodeは呼び出し段階でfalseを返す")
 	_runner.assert_true(capture.contains("依存注入メソッドを呼び出せません"), "呼び出し失敗を報告する")
 	_runner.assert_equal(_target.unrelated_call_count, 0, "別のメソッドを誤って呼ばない")
-	await _cleanup()
+	await _cleanup_async()
 
 
-func _test_invalid_targets() -> void:
+func _test_invalid_targets_async() -> void:
 	_runner.change_test_name("invalid_targets")
 	_container = InjectionContainer.new(null)
 	var injector = _injector()
@@ -132,7 +213,7 @@ func _test_invalid_targets() -> void:
 	await process_frame
 
 
-func _test_resolved_reference_and_success_state() -> void:
+func _test_resolved_reference_and_success_state_async() -> void:
 	_runner.change_test_name("resolved_reference_and_success_state")
 	_setup_target(SingleServiceNode.new())
 	var provided := TrackedService.new()
@@ -143,10 +224,10 @@ func _test_resolved_reference_and_success_state() -> void:
 	_runner.assert_true(result, "注入メソッドを実行できた成功時にtrueを返す")
 	_runner.assert_same(_target.received_service, expected, "対象が保持する参照はコンテナの解決結果と一致する")
 	_runner.assert_true(_target.was_injected, "注入先メソッドの状態変更が行われる")
-	await _cleanup()
+	await _cleanup_async()
 
 
-func _test_singleton_lifecycle() -> void:
+func _test_singleton_lifecycle_async() -> void:
 	_runner.change_test_name("singleton_lifecycle")
 	TrackedService.reset_generation_count()
 	_container = InjectionContainer.new(null)
@@ -167,7 +248,7 @@ func _test_singleton_lifecycle() -> void:
 	await process_frame
 
 
-func _test_transient_lifecycle() -> void:
+func _test_transient_lifecycle_async() -> void:
 	_runner.change_test_name("transient_lifecycle")
 	TrackedService.reset_generation_count()
 	_container = InjectionContainer.new(null)
@@ -202,7 +283,7 @@ func _instance_as(instance: TestDerivedService, key: StringName = &"") -> Servic
 	return ServiceRegistration.create_instance_registration(instance, DerivedService).as_type(BaseService).with_key(key)
 
 
-func _cleanup() -> void:
+func _cleanup_async() -> void:
 	if is_instance_valid(_target):
 		_target.queue_free()
 	_target = null
