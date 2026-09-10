@@ -22,6 +22,16 @@ const FailedResolutionNode := preload(
 const NoMethodNode := preload(
 	"res://tests/fixtures/injection_targets/no_injection_method.gd"
 )
+const TypeOverridesNode := preload(
+	"res://tests/fixtures/injection_targets/recording_type_overrides_node.gd"
+)
+const KeyedTypeOverrideNode := preload(
+	"res://tests/fixtures/injection_targets/recording_keyed_type_override_node.gd"
+)
+const UntypedNode := preload(
+	"res://tests/fixtures/injection_targets/recording_untyped_node.gd"
+)
+const UnnamedService := preload("res://tests/fixtures/services/unnamed_service.gd")
 
 var _runner := TestRunner.new(true)
 var _container: InjectionContainer
@@ -33,6 +43,10 @@ func _init() -> void:
 	await process_frame
 	await _test_no_arguments()
 	await _test_argument_order_key_precedence_and_fallback()
+	await _test_type_overrides_and_normal_resolution()
+	await _test_overridden_type_prefers_argument_key()
+	await _test_missing_type_override()
+	await _test_missing_overridden_type_is_atomic()
 	await _test_resolution_failure_is_atomic()
 	await _test_missing_method()
 	await _test_invalid_targets()
@@ -52,6 +66,73 @@ func _test_no_arguments() -> void:
 	_runner.assert_equal(_target.injection_count, 1, "引数なしの注入メソッドを一度だけ呼ぶ")
 	_runner.assert_array(_target.call_order, [&"inject_dependency"], "実際にメソッドが実行された順序を記録する")
 	_runner.assert_true(_target.was_injected, "注入先メソッドによる状態変更を確認する")
+	await _cleanup()
+
+
+func _test_type_overrides_and_normal_resolution() -> void:
+	_runner.change_test_name("type_overrides_and_normal_resolution")
+	_setup_target(TypeOverridesNode.new())
+	var local_service := UnnamedService.new()
+	var derived_service := DerivedService.new()
+	var base_service := DerivedService.new()
+	_container.register(ServiceRegistration.create_instance_registration(local_service, UnnamedService))
+	_container.register(ServiceRegistration.create_instance_registration(derived_service, DerivedService))
+	_container.register(_instance_as(base_service))
+	var result = _injector().try_inject_arguments(_target)
+
+	_runner.assert_true(result, "型オーバーライドを含む複数引数をすべて解決できる")
+	_runner.assert_equal(_target.injection_count, 1, "一部をオーバーライドして注入メソッドを一度だけ呼ぶ")
+	_runner.assert_same(_target.received_local_service, local_service, "非グローバルクラスをScript指定で解決する")
+	_runner.assert_same(_target.received_derived_service, derived_service, "宣言型の派生型で解決する")
+	_runner.assert_same(_target.received_base_service, base_service, "無関係な型を採用せず宣言型で解決する")
+	_runner.assert_same(_target.received_normal_service, base_service, "辞書にない引数は通常の宣言型で解決する")
+	await _cleanup()
+
+
+func _test_overridden_type_prefers_argument_key() -> void:
+	_runner.change_test_name("overridden_type_prefers_argument_key")
+	_setup_target(KeyedTypeOverrideNode.new())
+	var default_service := DerivedService.new()
+	var keyed_service := DerivedService.new()
+	_container.register(ServiceRegistration.create_instance_registration(default_service, DerivedService))
+	_container.register(
+		ServiceRegistration.create_instance_registration(keyed_service, DerivedService)
+			.with_key(&"overridden_service")
+	)
+	var result = _injector().try_inject_arguments(_target)
+
+	_runner.assert_true(result, "オーバーライド後の型を解決できる")
+	_runner.assert_same(_target.received_service, keyed_service, "オーバーライド後も引数名と同じキーを優先する")
+	await _cleanup()
+
+
+func _test_missing_type_override() -> void:
+	_runner.change_test_name("missing_type_override")
+	_setup_target(UntypedNode.new())
+	var capture := ErrorCapture.new()
+	capture.start()
+	var result = _injector().try_inject_arguments(_target)
+	capture.stop()
+
+	_runner.assert_false(result, "型情報もオーバーライドもなければfalseを返す")
+	_runner.assert_true(capture.contains("型オーバーライドが指定されていません"), "不足した型オーバーライドを報告する")
+	_runner.assert_equal(_target.injection_count, 0, "型を決定できない場合は注入メソッドを呼ばない")
+	await _cleanup()
+
+
+func _test_missing_overridden_type_is_atomic() -> void:
+	_runner.change_test_name("missing_overridden_type_is_atomic")
+	_setup_target(TypeOverridesNode.new())
+	_container.register(
+		ServiceRegistration.create_instance_registration(UnnamedService.new(), UnnamedService)
+	)
+	var capture := ErrorCapture.new()
+	capture.start()
+	var result = _injector().try_inject_arguments(_target)
+	capture.stop()
+
+	_runner.assert_false(result, "オーバーライド型の登録がなければfalseを返す")
+	_runner.assert_equal(_target.injection_count, 0, "解決済み引数があっても注入メソッドを呼ばない")
 	await _cleanup()
 
 
